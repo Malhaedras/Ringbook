@@ -168,8 +168,7 @@ Vacuum :: 5-10-16
 Create Living Earth :: 13-2-8
 Crucible :: 3-7-11-15
 Fourfold Paradigm :: star=1-6-12 / moon=4-9-14 / aether=5-10-16 / living earth=13-2-8
-Lease :: engine=3-8-14 / vital fire=2-3-8 / deadlock=2-10-14 / anchor=6-8-16 / upkeep=2-3-9-11
-Fizzle test :: 2-5-10-13`;
+Lease :: engine=3-8-14 / vital fire=2-3-8 / deadlock=2-10-14 / anchor=6-8-16 / upkeep=2-3-9-11;
 
 let work={name:"",layers:[{name:"layer 1",nodes:[]}],active:0,editing:null};
 let book=[],sel=null;
@@ -185,32 +184,7 @@ function status(t,extra){
   el.textContent=base+(extra?" ("+extra+")":"");
   el.className="note "+(t==="offline"?"bad":t==="synced"?"ok":"muted");
 }
-
-async function pull(){
-  const r=await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`,
-    {headers:{Authorization:"Bearer "+GH.token,Accept:"application/vnd.github+json"}});
-  if(r.status===404){sha=null;return [];}
-  if(!r.ok)throw new Error("get "+r.status);
-  const j=await r.json();sha=j.sha;
-  return JSON.parse(atob(j.content.replace(/\n/g,"")));
-}
-
-async function push(){
-  if(pushing||!dirty)return;
-  pushing=true;dirty=false;status("saving");
-  const body={message:"update book",content:btoa(unescape(encodeURIComponent(JSON.stringify(book))))};
-  if(sha)body.sha=sha;
-  try{
-    const r=await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`,
-      {method:"PUT",headers:{Authorization:"Bearer "+GH.token,Accept:"application/vnd.github+json","Content-Type":"application/json"},
-       body:JSON.stringify(body)});
-    if(r.status===409){await pull();dirty=true;throw new Error("conflict, retrying");}
-    if(!r.ok)throw new Error("put "+r.status);
-    sha=(await r.json()).content.sha;
-    status("synced");
-  }catch(e){dirty=true;status("offline",e.message);}
-  finally{pushing=false;if(dirty)setTimeout(push,1500);}
-}
+const tok=()=>localStorage.getItem("ringbook_token")||GH.token||"";
 
 function parse(txt){
   const out=[];
