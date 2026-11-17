@@ -296,8 +296,9 @@ function panel(){
       <input value="${esc(l.name)}" maxlength="32">
       <span class="stat ${st.cls}">${l.nodes.length} · ${st.label}</span>
       <button class="del" title="delete layer">×</button>`;
-    row.onclick=()=>{work.active=i;build();};
+    row.onclick=e=>{if(e.target===inp)return;work.active=i;build();};
     const inp=row.querySelector("input");
+    inp.onmousedown=e=>e.stopPropagation();
     inp.oninput=()=>{l.name=inp.value;};
     inp.onfocus=()=>{work.active=i;};
     row.querySelector(".del").onclick=e=>{e.stopPropagation();
