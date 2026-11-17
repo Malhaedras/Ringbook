@@ -195,7 +195,7 @@ async function push(){
     if(!r.ok)throw new Error("put "+r.status);
     sha=(await r.json()).content.sha;
     status("synced");
-  }catch(e){dirty=true;status("offline");}
+  }catch(e){dirty=true;status("offline", e.message);}
 }
 
 function parse(txt){
