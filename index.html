@@ -81,7 +81,7 @@
     <div class="list" id="list"></div>
     <div class="btns">
       <button id="delbook">Delete entry</button>
-       <button id="dupes">Find duplicates</button>
+      <button id="dupes">Find duplicates</button>
       <button id="exp">Export book</button>
       <button id="imp">Import</button>
       <input type="file" id="file" accept=".json" hidden>
@@ -163,14 +163,15 @@ Fizzle test :: 2-5-10-13`;
 let work={name:"",layers:[{name:"layer 1",nodes:[]}],active:0,editing:null};
 let book=[],sel=null;
 const GH=window.GH_CONFIG||{};
-let sha=null,pushTimer=null,dirty=false;
+let sha=null,pushing=false,dirty=false;
 
 const cache=()=>{try{localStorage.setItem("ringbook_cache",JSON.stringify(book));}catch(e){}};
-const save=()=>{cache();dirty=true;clearTimeout(pushTimer);pushTimer=setTimeout(push,1200);status("saving");};
+const save=()=>{cache();dirty=true;push();};
 
-function status(t){
+function status(t,extra){
   const el=document.getElementById("sync");if(!el)return;
-  el.textContent={saving:"saving…",synced:"synced",offline:"offline — will retry"}[t]||"";
+  const base={saving:"saving…",synced:"synced",offline:"offline — will retry"}[t]||"";
+  el.textContent=base+(extra?" ("+extra+")":"");
   el.className="note "+(t==="offline"?"bad":t==="synced"?"ok":"muted");
 }
 
@@ -184,19 +185,20 @@ async function pull(){
 }
 
 async function push(){
-  if(!dirty)return;
-  dirty=false;
+  if(pushing||!dirty)return;
+  pushing=true;dirty=false;status("saving");
   const body={message:"update book",content:btoa(unescape(encodeURIComponent(JSON.stringify(book))))};
   if(sha)body.sha=sha;
   try{
     const r=await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`,
       {method:"PUT",headers:{Authorization:"Bearer "+GH.token,Accept:"application/vnd.github+json","Content-Type":"application/json"},
        body:JSON.stringify(body)});
-    if(r.status===409){await pull();dirty=true;return push();}
+    if(r.status===409){await pull();dirty=true;throw new Error("conflict, retrying");}
     if(!r.ok)throw new Error("put "+r.status);
     sha=(await r.json()).content.sha;
     status("synced");
-  }catch(e){dirty=true;status("offline", e.message);}
+  }catch(e){dirty=true;status("offline",e.message);}
+  finally{pushing=false;if(dirty)setTimeout(push,1500);}
 }
 
 function parse(txt){
@@ -216,8 +218,7 @@ function parse(txt){
 }
 const notaOf=w=>w.name+" :: "+w.layers.map(l=>l.name+"="+l.nodes.join("-")).join(" / ");
 
-  const sig=w=>w.layers.map(l=>[...l.nodes].sort((a,b)=>a-b).join(",")).filter(Boolean).sort().join("|");
-
+const sig=w=>w.layers.map(l=>[...l.nodes].sort((a,b)=>a-b).join(",")).filter(Boolean).sort().join("|");
 function findDupes(entry,skipIdx){
   const s=sig(entry),name=entry.name.trim().toLowerCase();
   const exact=[],sameName=[],near=[];
@@ -233,6 +234,7 @@ function findDupes(entry,skipIdx){
   });
   return{exact,sameName,near};
 }
+
 function layerStatus(l){
   if(l.nodes.length<3)return{cls:"warn",label:"short",v:"Incomplete — needs three vertices."};
   const bad=CARD.filter(([a,b])=>l.nodes.includes(a)&&l.nodes.includes(b));
@@ -372,20 +374,6 @@ document.getElementById("save").onclick=()=>{
   if(!nm){alert("Give the work a name first.");return;}
   const entry={name:nm,layers:work.layers.map(l=>({label:l.name,nodes:[...l.nodes]})).filter(l=>l.nodes.length)};
   if(!entry.layers.length){alert("It has no nodes yet.");return;}
-  if(work.editing!==null&&book[work.editing]){book[work.editing]=entry;sel=work.editing;}
-  else{book.push(entry);sel=book.length-1;work.editing=sel;}
-  save();build();
-};
-
-document.getElementById("copynota").onclick=()=>{
-  if(!work.name.trim()){alert("Name it first.");return;}
-  navigator.clipboard.writeText(notaOf(work));
-};
-document.getElementById("save").onclick=()=>{
-  const nm=(work.name||"").trim();
-  if(!nm){alert("Give the work a name first.");return;}
-  const entry={name:nm,layers:work.layers.map(l=>({label:l.name,nodes:[...l.nodes]})).filter(l=>l.nodes.length)};
-  if(!entry.layers.length){alert("It has no nodes yet.");return;}
 
   const d=findDupes(entry,work.editing);
 
@@ -410,8 +398,22 @@ document.getElementById("save").onclick=()=>{
   else{book.push(entry);sel=book.length-1;work.editing=sel;}
   save();build();
 };
+
+document.getElementById("copynota").onclick=()=>{
+  if(!work.name.trim()){alert("Name it first.");return;}
+  navigator.clipboard.writeText(notaOf(work));
+};
+document.getElementById("loadnota").onclick=()=>{
+  const add=parse(document.getElementById("nota").value);
+  if(!add.length)return;
+  const s=add[0];
+  work={name:s.name,layers:s.layers.map((l,k)=>({name:(l.label||"layer "+(k+1)),nodes:[...l.nodes]})),active:0,editing:null};
+  sel=null;document.getElementById("wname").value=s.name;
+  document.getElementById("nota").value="";build();
+};
 document.getElementById("delbook").onclick=()=>{
   if(sel===null)return;
+  if(!confirm(`Delete "${book[sel].name}"?`))return;
   book.splice(sel,1);sel=null;work.editing=null;save();build();
 };
 document.getElementById("dupes").onclick=()=>{
@@ -423,11 +425,23 @@ document.getElementById("dupes").onclick=()=>{
   if(!out.length){alert("No duplicate shapes in the book.");return;}
   alert("Duplicate shapes:\n"+out.map(([a,b])=>`  ${book[a].name}  =  ${book[b].name}`).join("\n"));
 };
+document.getElementById("exp").onclick=()=>{
+  const b=new Blob([JSON.stringify(book,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="spellbook.json";
+  a.click();URL.revokeObjectURL(a.href);
+};
+document.getElementById("imp").onclick=()=>document.getElementById("file").click();
+document.getElementById("file").onchange=e=>{
+  const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(Array.isArray(d)){book=d;sel=null;save();build();}}catch(x){alert("Bad file.");}};
+  r.readAsText(f);e.target.value="";
+};
+
 async function initBook(){
   try{const c=JSON.parse(localStorage.getItem("ringbook_cache")||"null");if(Array.isArray(c)&&c.length)book=c;}catch(e){}
   if(!book.length)book=parse(SEED);
   try{const remote=await pull();if(Array.isArray(remote)&&remote.length)book=remote;status("synced");}
-  catch(e){status("offline");}
+  catch(e){status("offline",e.message);}
   build();
 }
 
