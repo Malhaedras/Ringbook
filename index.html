@@ -59,7 +59,7 @@
 </style>
 </head>
 <body>
-  <div id="gate"><div class="box">
+<div id="gate"><div class="box">
   <h1>Locked</h1>
   <p class="sub" style="margin-bottom:10px">Enter the phrase</p>
   <input type="password" id="pw" placeholder="passphrase">
@@ -86,11 +86,13 @@
       <textarea id="nota" rows="3" placeholder="Lease :: engine=3-8-14 / vital fire=2-3-8"></textarea>
       <div class="btns"><button id="loadnota">Load into builder</button></div>
     </div>
-<div class="panel">
+
+    <div class="panel">
       <div class="muted" style="margin-bottom:5px">Access token</div>
       <input type="text" id="tok" placeholder="ghp_…">
       <div class="btns"><button id="settok">Save token</button></div>
     </div>
+
     <label style="margin-top:12px">Library</label>
     <input type="text" id="q" placeholder="search name or node number">
     <div class="list" id="list"></div>
@@ -184,10 +186,12 @@ const save=()=>{cache();dirty=true;push();};
 
 function status(t,extra){
   const el=document.getElementById("sync");if(!el)return;
-const base={saving:"saving…",synced:"synced",offline:"offline — will retry",local:"saved locally"}[t]||"";  el.textContent=base+(extra?" ("+extra+")":"");
+  const base={saving:"saving…",synced:"synced",offline:"offline — will retry",local:"saved locally"}[t]||"";
+  el.textContent=base+(extra?" ("+extra+")":"");
   el.className="note "+(t==="offline"?"bad":t==="synced"?"ok":"muted");
 }
 const tok=()=>localStorage.getItem("ringbook_token")||GH.token||"";
+
 async function pull(){
   const r=await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`,
     {headers:{Authorization:"Bearer "+tok(),Accept:"application/vnd.github+json"}});
@@ -214,6 +218,7 @@ async function push(){
   }catch(e){dirty=true;status("offline",e.message);}
   finally{pushing=false;if(dirty)setTimeout(push,1500);}
 }
+
 function parse(txt){
   const out=[];
   txt.split(/\n/).forEach(line=>{
@@ -381,7 +386,7 @@ document.getElementById("clearall").onclick=()=>{
   sel=null;document.getElementById("wname").value="";build();
 };
 document.getElementById("newspell").onclick=()=>document.getElementById("clearall").click();
-  document.getElementById("lock").onclick=()=>{localStorage.removeItem("ringbook_unlocked");location.reload();};
+document.getElementById("lock").onclick=()=>{localStorage.removeItem("ringbook_unlocked");location.reload();};
 document.getElementById("wname").oninput=e=>{work.name=e.target.value;};
 
 document.getElementById("save").onclick=()=>{
@@ -405,79 +410,4 @@ document.getElementById("save").onclick=()=>{
     }
   }
   if(d.near.length){
-    const list=d.near.map(x=>`  ${book[x.i].name} — ${Math.round(x.j*100)}% shared`).join("\n");
-    if(!confirm(`Similar entries exist:\n${list}\n\nSave anyway?`))return;
-  }
-
-  if(work.editing!==null&&book[work.editing]){book[work.editing]=entry;sel=work.editing;}
-  else{book.push(entry);sel=book.length-1;work.editing=sel;}
-  save();build();
-};
-
-document.getElementById("copynota").onclick=()=>{
-  if(!work.name.trim()){alert("Name it first.");return;}
-  navigator.clipboard.writeText(notaOf(work));
-};
-document.getElementById("loadnota").onclick=()=>{
-  const add=parse(document.getElementById("nota").value);
-  if(!add.length)return;
-  const s=add[0];
-  work={name:s.name,layers:s.layers.map((l,k)=>({name:(l.label||"layer "+(k+1)),nodes:[...l.nodes]})),active:0,editing:null};
-  sel=null;document.getElementById("wname").value=s.name;
-  document.getElementById("nota").value="";build();
-};
-document.getElementById("delbook").onclick=()=>{
-  if(sel===null)return;
-  if(!confirm(`Delete "${book[sel].name}"?`))return;
-  book.splice(sel,1);sel=null;work.editing=null;save();build();
-};
-document.getElementById("dupes").onclick=()=>{
-  const seen=new Map(),out=[];
-  book.forEach((b,i)=>{
-    const s=sig({layers:b.layers});
-    if(seen.has(s))out.push([seen.get(s),i]);else seen.set(s,i);
-  });
-  if(!out.length){alert("No duplicate shapes in the book.");return;}
-  alert("Duplicate shapes:\n"+out.map(([a,b])=>`  ${book[a].name}  =  ${book[b].name}`).join("\n"));
-};
-document.getElementById("exp").onclick=()=>{
-  const b=new Blob([JSON.stringify(book,null,2)],{type:"application/json"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="spellbook.json";
-  a.click();URL.revokeObjectURL(a.href);
-};
-document.getElementById("imp").onclick=()=>document.getElementById("file").click();
-document.getElementById("file").onchange=e=>{
-  const f=e.target.files[0];if(!f)return;const r=new FileReader();
-  r.onload=()=>{try{const d=JSON.parse(r.result);if(Array.isArray(d)){book=d;sel=null;save();build();}}catch(x){alert("Bad file.");}};
-  r.readAsText(f);e.target.value="";
-};
-
-document.getElementById("settok").onclick=()=>{
-  localStorage.setItem("ringbook_token",document.getElementById("tok").value.trim());
-  location.reload();
-};
-document.getElementById("tok").value=localStorage.getItem("ringbook_token")||"";
-
-const PW=(window.GH_CONFIG&&window.GH_CONFIG.password)||"";
-if(!PW||localStorage.getItem("ringbook_unlocked")==="1")document.getElementById("gate").classList.add("off");
-document.getElementById("unlock").onclick=()=>{
-  if(document.getElementById("pw").value===PW){
-    localStorage.setItem("ringbook_unlocked","1");
-    document.getElementById("gate").classList.add("off");
-  }else document.getElementById("pwerr").textContent="Wrong.";
-};
-document.getElementById("pw").onkeydown=e=>{if(e.key==="Enter")document.getElementById("unlock").click();};
-async function initBook(){
-  try{const c=JSON.parse(localStorage.getItem("ringbook_cache")||"null");if(Array.isArray(c)&&c.length)book=c;}catch(e){}
-  if(!book.length)book=parse(SEED);
-  try{const remote=await pull();if(Array.isArray(remote)&&remote.length)book=remote;status("synced");}
-  catch(e){status("offline",e.message);}
-  build();
-}
-
-addEventListener("online",()=>{if(dirty)push();});
-if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js");
-initBook();
-</script>
-</body>
-</html>
+    const list=d.near.map(x=>`  ${book[x.i].name} — ${Math.round(x.j*100)}% shared`).join("\n
