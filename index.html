@@ -450,13 +450,14 @@ document.getElementById("file").onchange=e=>{
   const f=e.target.files[0];if(!f)return;const r=new FileReader();
   r.onload=()=>{try{const d=JSON.parse(r.result);if(Array.isArray(d)){book=d;sel=null;save();build();}}catch(x){alert("Bad file.");}};
   r.readAsText(f);e.target.value="";
+};
 
-  document.getElementById("settok").onclick=()=>{
+document.getElementById("settok").onclick=()=>{
   localStorage.setItem("ringbook_token",document.getElementById("tok").value.trim());
   location.reload();
 };
 document.getElementById("tok").value=localStorage.getItem("ringbook_token")||"";
-  
+
 const PW=(window.GH_CONFIG&&window.GH_CONFIG.password)||"";
 if(!PW||localStorage.getItem("ringbook_unlocked")==="1")document.getElementById("gate").classList.add("off");
 document.getElementById("unlock").onclick=()=>{
