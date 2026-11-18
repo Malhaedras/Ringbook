@@ -3,4 +3,4 @@ window.GH_CONFIG.owner = "Malhaedras";
 window.GH_CONFIG.repo = "ringbook";
 window.GH_CONFIG.path = "book.json";
 window.GH_CONFIG.token = "";
-window.GH_CONFIG.password = "";
+window.GH_CONFIG.password = "Kommando1";
