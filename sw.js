@@ -1,4 +1,4 @@
-const CACHE = "ring-v5.6";
+const CACHE = "ring-v12";
 const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
