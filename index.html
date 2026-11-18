@@ -86,7 +86,11 @@
       <textarea id="nota" rows="3" placeholder="Lease :: engine=3-8-14 / vital fire=2-3-8"></textarea>
       <div class="btns"><button id="loadnota">Load into builder</button></div>
     </div>
-
+<div class="panel">
+      <div class="muted" style="margin-bottom:5px">Access token</div>
+      <input type="text" id="tok" placeholder="ghp_…">
+      <div class="btns"><button id="settok">Save token</button></div>
+    </div>
     <label style="margin-top:12px">Library</label>
     <input type="text" id="q" placeholder="search name or node number">
     <div class="list" id="list"></div>
@@ -168,7 +172,7 @@ Vacuum :: 5-10-16
 Create Living Earth :: 13-2-8
 Crucible :: 3-7-11-15
 Fourfold Paradigm :: star=1-6-12 / moon=4-9-14 / aether=5-10-16 / living earth=13-2-8
-Lease :: engine=3-8-14 / vital fire=2-3-8 / deadlock=2-10-14 / anchor=6-8-16 / upkeep=2-3-9-11;
+Lease :: engine=3-8-14 / vital fire=2-3-8 / deadlock=2-10-14 / anchor=6-8-16 / upkeep=2-3-9-11`;
 
 let work={name:"",layers:[{name:"layer 1",nodes:[]}],active:0,editing:null};
 let book=[],sel=null;
@@ -180,12 +184,36 @@ const save=()=>{cache();dirty=true;push();};
 
 function status(t,extra){
   const el=document.getElementById("sync");if(!el)return;
-  const base={saving:"saving…",synced:"synced",offline:"offline — will retry"}[t]||"";
-  el.textContent=base+(extra?" ("+extra+")":"");
+const base={saving:"saving…",synced:"synced",offline:"offline — will retry",local:"saved locally"}[t]||"";  el.textContent=base+(extra?" ("+extra+")":"");
   el.className="note "+(t==="offline"?"bad":t==="synced"?"ok":"muted");
 }
 const tok=()=>localStorage.getItem("ringbook_token")||GH.token||"";
+async function pull(){
+  const r=await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`,
+    {headers:{Authorization:"Bearer "+tok(),Accept:"application/vnd.github+json"}});
+  if(r.status===404){sha=null;return [];}
+  if(!r.ok)throw new Error("get "+r.status);
+  const j=await r.json();sha=j.sha;
+  return JSON.parse(atob(j.content.replace(/\n/g,"")));
+}
 
+async function push(){
+  if(!tok()){status("local");return;}
+  if(pushing||!dirty)return;
+  pushing=true;dirty=false;status("saving");
+  const body={message:"update book",content:btoa(unescape(encodeURIComponent(JSON.stringify(book))))};
+  if(sha)body.sha=sha;
+  try{
+    const r=await fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}/contents/${GH.path}`,
+      {method:"PUT",headers:{Authorization:"Bearer "+tok(),Accept:"application/vnd.github+json","Content-Type":"application/json"},
+       body:JSON.stringify(body)});
+    if(r.status===409){await pull();dirty=true;throw new Error("conflict, retrying");}
+    if(!r.ok)throw new Error("put "+r.status);
+    sha=(await r.json()).content.sha;
+    status("synced");
+  }catch(e){dirty=true;status("offline",e.message);}
+  finally{pushing=false;if(dirty)setTimeout(push,1500);}
+}
 function parse(txt){
   const out=[];
   txt.split(/\n/).forEach(line=>{
@@ -422,7 +450,13 @@ document.getElementById("file").onchange=e=>{
   const f=e.target.files[0];if(!f)return;const r=new FileReader();
   r.onload=()=>{try{const d=JSON.parse(r.result);if(Array.isArray(d)){book=d;sel=null;save();build();}}catch(x){alert("Bad file.");}};
   r.readAsText(f);e.target.value="";
+
+  document.getElementById("settok").onclick=()=>{
+  localStorage.setItem("ringbook_token",document.getElementById("tok").value.trim());
+  location.reload();
 };
+document.getElementById("tok").value=localStorage.getItem("ringbook_token")||"";
+  
 const PW=(window.GH_CONFIG&&window.GH_CONFIG.password)||"";
 if(!PW||localStorage.getItem("ringbook_unlocked")==="1")document.getElementById("gate").classList.add("off");
 document.getElementById("unlock").onclick=()=>{
